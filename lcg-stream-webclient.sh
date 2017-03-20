@@ -125,7 +125,7 @@ if ! [ "${NAME:-undef}" == "undef" ]; then
          --data 'type=$NAME' | html2text
 fi
 
-if ! [ "${NOTICE:-undef}" == "undef" ]; then
+if $NOTICE; then
     [ "${NOTICEFILE:=-}" == "-" ] && echo "Type a message:"
     html=$(cat ${NOTICEFILE} | sed -e 's/\t\(.*\)$/\<blockquote\>\1\<\/blockquote\>/g' | sed -e 's/^/\<p\>/g')
     data=$(urlencode "$html")

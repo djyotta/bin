@@ -148,7 +148,7 @@ fi
 
 cleanup(){
     echo "Cleaning up"
-    [ "$ENCODER" ] && kill -9 $ENCODER
+    [ "$ENCODER" ] && kill $ENCODER
 	wait $STREAMER
     rm -rf $WORKING
     exit
@@ -206,16 +206,14 @@ elif ! [ "${FFMPEG-x}" == "x" ] && $NOSTREAM; then
 fi
 ENCODER=$!
 
-sleep 5
-
 #start streamer/player
 if ! [ "${MPLAYER-x}" == "x" ]; then
 	setsid $MPLAYER -aspect $ASPECT -fps $FPS $FIFO 2>stream.err 1>stream.out &
 elif ! [ "${FFPLAY-x}" == "x" ]; then
 	setsid $FFPLAY -re -i $FIFO 2>stream.err 1>stream.out &
 elif ! $NOSTREAM; then
-	FFMPEG=$(wich ffmpeg) || FFMPEG=$(which avconv) || die $NOEXIST "ffmpeg/avconv not found in PATH"
-	setsid $FFMPEG -re -i $FIFO -c:a copy -c:v copy -f flv  $TARGET 2>stream.err 1>stream.out &
+	FFMPEG=$(which ffmpeg || which avconv) || die $NOEXIST "ffmpeg/avconv not found in PATH"
+	setsid $FFMPEG -r $FPS -i $FIFO -c:a copy -c:v copy -f flv  $TARGET 2>stream.err 1>stream.out &
 fi
 STREAMER=$!
 

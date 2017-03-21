@@ -6,6 +6,10 @@ NOTICE=false
 URL='http://webcast.lcg.org/admin'
 COOKIE=$(pwd)/cookie
 NEWCOOKIE=false
+# -f NAME is one of:
+#         BS        Bible Study
+#         TEST     Test (won't show in archive)
+#    which will save as Bible Study, or as Test.
 
 urlencode() {
     # urlencode <string>
@@ -122,7 +126,7 @@ if ! [ "${NAME:-undef}" == "undef" ]; then
          -H 'DNT: 1' \
          -H 'Connection: keep-alive' \
          -H 'Upgrade-Insecure-Requests: 1' \
-         --data 'type=$NAME' | html2text
+         --data "type=$NAME" | html2text
 fi
 
 if $NOTICE; then

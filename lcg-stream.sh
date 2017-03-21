@@ -32,6 +32,21 @@ show_help(){
         avconv - capture encode and stream with avconv
         vlc - capture and encode with vlc, stream with ffmpeg
 
+  Note: Every time ffmpeg/avconv, mplayer, vlc are updated they behave slightly differently!
+        At time of writing the following combinations work:
+		 "-e mencoder"
+		 "-e mencoder -n mplayer"
+		 "-e mencoder -n ffplay"
+		 "-e vlc"
+		 "-e vlc -n ffplay"
+
+		I found that mplayer can't playback streams produced by ffmpeg very well.
+	 	This is why "-e vlc -n mplayer" doesn't work. 
+		Also even "-e mencoder" will ultimately stream with ffmpeg, so play back of the actual live stream
+		won't work well with mplayer. However, both "-e mencoder" and "-e vlc" produce streams that are 
+		playable with ffplay.
+		Ultimately, the best encoder to use is "-e vlc", as google chrome won't play the video of the "-e mencoder" stream. :(
+
 EOF
 }
 while getopts ":a:d:e:f:hn:s:t:v" opt; do
@@ -51,7 +66,6 @@ while getopts ":a:d:e:f:hn:s:t:v" opt; do
                     FFMPEG=$(which $OPTARG) || die $NOEXIST "$OPTARG not found in PATH"
                     ;;
                 mencoder) 
-                    die $NOSUPPORT "Encoding with $OPTARG not currently supported"
                     MENCODER=$(which $OPTARG) || die $NOEXIST "$OPTARG not found in PATH"
                     ;;
                 vlc)
@@ -161,23 +175,25 @@ cleanup(){
 trap "cleanup" INT QUIT TERM
 WORKING=$(mktemp -d)
 FIFO=$WORKING/inout.flv
-mkfifo $FIFO
-chmod 0777 $FIFO
+if [ "${MPLAYER-x}" == "x" ]; then
+	mkfifo $FIFO
+fi
 
 if [ "${AUDIODEVICE-x}" == "x" ]; then
-    opts=""
+    AUDIOOPTS=""
 else 
-    if [ "${MENCODER-x}" == "x" ]; then
-        opts="-f alsa -ac 1 -ar 44100 -i pulse"
-    else
-        opts=":forceaudio:alsa:adevice=$AUDIODEVICE:audiorate=44100:amode=0"
+    if ! [ "${MENCODER-x}" == "x" ]; then
+        AUDIOOPTS=":forceaudio:alsa:adevice=$AUDIODEVICE:audiorate=44100:amode=0"
+	elif ! [ "${VLC-x}" == "x" ]; then
+		AUDIOOPTS="--input-slave=alsa://$AUDIODEVICE"
+    elif ! [ "${FFMPEG-x}" == "x" ]; then
+        AUDIOOPTS="-f alsa -ac 1 -ar 44100 -i pulse"
     fi
 fi
 
 #start encoder
 if ! [ "${MENCODER-x}" == "x" ]; then
-    exit 1 #ffmpeg doesn't like mencoder x264 output 
-    $MENCODER -tv device=$VIDEODEVICE:width=$WIDTH:height=$HEIGHT:fps=$FPS$opts \
+    $MENCODER -tv device=$VIDEODEVICE:width=$WIDTH:height=$HEIGHT:fps=$FPS$AUDIOOPTS \
 			  -vf scale=-1:-10,harddup \
               -ovc x264 \
 			  -x264encopts preset=fast:bitrate=350:vbv_maxrate=350 \
@@ -189,15 +205,15 @@ if ! [ "${MENCODER-x}" == "x" ]; then
 elif ! [ "${VLC-x}" == "x" ]; then
     $VLC -I dummy v4l2://$VIDEODEVICE \
          --live-caching 2000 \
-         --input-slave=alsa://$AUDIODEVICE \
+         $AUDIOOPTS \
          --v4l2-fps=$FPS \
          --v4l2-width=$WIDTH --v4l2-height=$HEIGHT \
          --sout="#transcode{vcodec=h264,vb=300,acodec=mp4a,ab=48,channels=1,samplerate=44100}:std{access=file,mux=flv,dst=$FIFO}" \
          2>encoder.err 1>encoder.out &
 elif ! [ "${FFMPEG-x}" == "x" ] && $NOSTREAM; then
     #untested due to ffmpeg freezing on DELL Latitude E6400 when capturing from video devices
-    $FFMPEG -y $opts -f video4linux2 \
-			-framerate $FPS -r $FPS \
+    $FFMPEG -y $AUDIOOPTS -f video4linux2 \
+			-framerate -r $FPS \
 			-s ${WIDTH}x${HEIGHT} \
 			-input_format mjpeg \
 			-i $VIDEODEVICE \
@@ -208,9 +224,10 @@ ENCODER=$!
 
 #start streamer/player
 if ! [ "${MPLAYER-x}" == "x" ]; then
+	sleep 5
 	setsid $MPLAYER -aspect $ASPECT -fps $FPS $FIFO 2>stream.err 1>stream.out &
 elif ! [ "${FFPLAY-x}" == "x" ]; then
-	setsid $FFPLAY -re -i $FIFO 2>stream.err 1>stream.out &
+	setsid $FFPLAY -i $FIFO 2>stream.err 1>stream.out &
 elif ! $NOSTREAM; then
 	FFMPEG=$(which ffmpeg || which avconv) || die $NOEXIST "ffmpeg/avconv not found in PATH"
 	setsid $FFMPEG -r $FPS -i $FIFO -c:a copy -c:v copy -f flv  $TARGET 2>stream.err 1>stream.out &

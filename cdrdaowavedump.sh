@@ -93,18 +93,13 @@ if [ "${PRE_PROCESS:-x}" != "x" ]; then
 	if ! [ -p /tmp/fifo ]; then mkfifo /tmp/fifo; fi
 	echo "Pre-processing..."
 	TMP=/tmp/${OUTPUT%%.*}-pre.${OUTPUT##*.}
-	case "${INPUT##*.}" in
-		m4a)
-			;&
-		mp4)
-			FFMPEG_FILE=${TMP%%-*}-ffmpeg.${OUTPUT##*.}
-			ffmpeg -i $INPUT -f sox ${FFMPEG_FILE}
-			sox $ARGS ${FFMPEG_FILE} $TMP $PRE_PROCESS 
-			rm ${FFMPEG_FILE}
-			;;
-		*)
-			sox $ARGS $INPUT $TMP $PRE_PROCESS
-	esac
+	if [ "$(soxi $INPUT 2>&1 1>/dev/null | cut -d':' -f1)" == "soxi FAIL formats" ]; then
+		FFMPEG_FILE=${TMP%%-*}-ffmpeg.${OUTPUT##*.}
+		ffmpeg -i $INPUT -f sox ${FFMPEG_FILE}
+		sox $ARGS ${FFMPEG_FILE} $TMP $PRE_PROCESS 
+	else
+		sox $ARGS $INPUT $TMP $PRE_PROCESS
+	fi
 	INPUT=$TMP
 	DURATION=$(( $( date -u --date="$(soxi $INPUT | grep Duration | cut -d':' -f2- | cut -d' ' -f2)" +%s ) - $( date -u --date="0:00:00" +%s ) ))
 	RATE=$(soxi $INPUT | grep "Sample Rate" | cut -d':' -f2- | cut -d' ' -f2)

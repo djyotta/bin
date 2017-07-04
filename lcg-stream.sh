@@ -39,6 +39,7 @@ show_help(){
          "-e mencoder -n mplayer"
          "-e mencoder -n ffplay"
          "-e vlc"
+         "-e vlc -n vlc"
          "-e vlc -n ffplay"
 
         I found that mplayer can't playback streams produced by ffmpeg very well.

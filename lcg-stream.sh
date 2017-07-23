@@ -3,12 +3,11 @@
 VIDEODEVICE=/dev/video0
 V4L2CTL=$(which v4l2-ctl)
 BC=$(which bc)
-NOSTREAM=false
 MISSING=$(printf "%d" 0x494d5353)
 NOEXIST=$(printf "%d" 0x4f4e454e)
 HELP=$(printf "%d" 0x4548504c)
 NOSUPPORT=$(printf "%d" 0x4855484f)
-VLCPLAY=false
+NOSTREAM=false
 die(){
     if [ "$2" ]; then echo "$2" >&2; fi
     if [ $((1 == HELP)) ]; then show_help >&2; fi
@@ -100,7 +99,6 @@ while getopts ":a:d:e:f:hn:s:t:v" opt; do
                     ;;
                 vlc)
                     which $OPTARG || die $NOEXIST "$OPTARG not found in PATH"
-                    VLCPLAY=true
             esac
             ;;
         s)
@@ -214,22 +212,25 @@ if ! [ "${MENCODER-x}" == "x" ]; then
               tv:// 2>encoder.err 1>encoder.out &
     ENCODER=$!
 elif ! [ "${VLC-x}" == "x" ]; then
-    VLCTRANSCODE="transcode{vcodec=h264,vb=300,acodec=mp4a,ab=48,channels=1,samplerate=44100}"
-    VLCSTD="std{access=file,mux=flv,dst=$FIFO}"
-    $VLCPLAY && VLCCHAIN="#${VLCTRANSCODE}:duplicate{dst=display,dst=$VLCSTD}"
-    $VLCPLAY || VLCCHAIN="#${VLCTRANSCODE}:${VLCSTD}"
-    $VLCPLAY || VLCCACHING="--live-caching 2000"
+    VLCTRANSCODE="transcode{vcodec=h264,vb=350,acodec=aac,ab=48,channels=1,samplerate=44100}"
+    VLCSTD="std{access=stream,mux=flv,dst=$FIFO}"
+    $NOSTREAM && VLCCHAIN="#${VLCTRANSCODE}:"
+    $NOSTREAM && VLCDISPLAY="--sout-display"
+    $NOSTREAM || VLCCHAIN="#${VLCTRANSCODE}:${VLCSTD}"
+    $NOSTREAM || VLCCACHING="--live-caching 2000"
     VLCINTERFACE="-I dummy"
-    setsid $VLC $VLCINTERFACE v4l2://$VIDEODEVICE \
-         $VLCCACHING \
-         $AUDIOOPTS \
-         --v4l2-fps=$FPS \
-         --v4l2-width=$WIDTH --v4l2-height=$HEIGHT \
-         --sout="$VLCCHAIN" \
-         --sout-avcodec-strict=-2 \
-         2>encoder.err 1>encoder.out &
+    setsid $VLC $VLCINTERFACE \
+           v4l2://$VIDEODEVICE \
+           $VLCCACHING \
+           $AUDIOOPTS \
+           --v4l2-fps=$FPS \
+           --v4l2-width=$WIDTH --v4l2-height=$HEIGHT \
+           --sout-avcodec-strict=-2 \
+           --sout="$VLCCHAIN" \
+           $VLCDISPLAY \
+           2>encoder.err 1>encoder.out &
     ENCODER=$!
-    $VLCPLAY && STREAMER=$!
+    $NOSTREAM && STREAMER=$!
 elif ! [ "${FFMPEG-x}" == "x" ]; then
     if $NOSTREAM; then
         FFMPEGOUTPUT=$FIFO
@@ -246,6 +247,7 @@ elif ! [ "${FFMPEG-x}" == "x" ]; then
             -b:v 300k -b:a 48k \
             -f flv $FFMPEGOUTPUT 2>encoder.err 1>encoder.out &
     ENCODER=$!
+    $NOSTREAM && STREAMER=$!
 fi
 
 #start streamer/player
@@ -256,12 +258,10 @@ if ! [ "${MPLAYER-x}" == "x" ]; then
 elif ! [ "${FFPLAY-x}" == "x" ]; then
     setsid $FFPLAY -autoexit -i $FIFO 2>stream.err 1>stream.out &
     STREAMER=$!
-elif ! $NOSTREAM; then
-    if ! [ "${FFMPEG:-x}" ]; then
-        FFMPEG=$(which ffmpeg || which avconv) || die $NOEXIST "ffmpeg/avconv not found in PATH"
-        setsid $FFMPEG -re -r $FPS -i $FIFO -c:a copy -c:v copy -f flv "$TARGET" 2>stream.err 1>stream.out &
-        STREAMER=$!
-    fi
+elif ! $NOSTREAM && ! [ $STREAMER ]; then
+    FFMPEG=$(which ffmpeg || which avconv) || die $NOEXIST "ffmpeg/avconv not found in PATH"
+    setsid $FFMPEG -re -r $FPS -i $FIFO -c:a copy -c:v copy -f flv "$TARGET" 2>stream.err 1>stream.out &
+    STREAMER=$!
 fi
 
 : ${STREAMER:=$ENCODER}

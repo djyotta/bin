@@ -68,6 +68,18 @@ if ! [ -z "$OUTPUT" ]; then
 	echo "Output: $OUTPUT"
 else echo "Output: audiodump.wav"
 fi
+###############################################################################
+while read line; do
+	if [[ $line =~ Duration ]]; then
+		DURATION=$(( $( date -u --date="$(echo $line | cut -d':' -f2- | cut -d' ' -f2)" +%s ) - $( date -u --date="0:00:00" +%s ) ))
+	elif [[ $line =~ 'Sample Rate' ]]; then
+		RATE=$(echo $line | cut -d':' -f2- | cut -d' ' -f2)
+	fi
+echo $line
+done <<EOF
+$(soxi "$INPUT")
+EOF
+################################################################################
 : ${MAX_LEN:=4800}      # 80 minute CD...
 CDDA_RATE=44100   # CDDA audio...
 ARGS="-S -V3 -G "
@@ -80,18 +92,14 @@ set -x
 if [ "${PRE_PROCESS:-x}" != "x" ]; then
 	echo "Pre-processing..."
 	TMP=/tmp/${OUTPUT%%.*}-pre.${OUTPUT##*.}
-	case "${INPUT##*.}" in
-		m4a)
-			;&
-		mp4)
-			ffmpeg -i $INPUT -f sox - | (sleep 1; sox $ARGS - $TMP $PRE_PROCESS)
-			;;
-		*)
-			sox $ARGS $INPUT $TMP $PRE_PROCESS
-	esac
+	if [ "$(soxi "$INPUT" 2>&1 1>/dev/null | cut -d':' -f1)" == "soxi FAIL formats" ]; then
+		ffmpeg -i $INPUT -f sox - | (sleep 1; sox $ARGS - $TMP $PRE_PROCESS)
+	else
+		sox $ARGS "$INPUT" "$TMP" $PRE_PROCESS
+	fi
 	INPUT=$TMP
-	DURATION=$(( $( date -u --date="$(soxi $INPUT | grep Duration | cut -d':' -f2- | cut -d' ' -f2)" +%s ) - $( date -u --date="0:00:00" +%s ) ))
-	RATE=$(soxi $INPUT | grep "Sample Rate" | cut -d':' -f2- | cut -d' ' -f2)
+	DURATION=$(( $( date -u --date="$(soxi "$INPUT" | grep Duration | cut -d':' -f2- | cut -d' ' -f2)" +%s ) - $( date -u --date="0:00:00" +%s ) ))
+	RATE=$(soxi "$INPUT" | grep "Sample Rate" | cut -d':' -f2- | cut -d' ' -f2)
 	echo "Pre-processing complete. New Duration: $DURATION"
 fi
 ###############################################################################
@@ -117,21 +125,21 @@ while (( DURATION > MAX_LEN )); do
 		echo "$DIVIDER"
 		echo "Trying to trim silence rather than increase tempo..."
 		TMP=/tmp/${OUTPUT%%.*}-tmp.${OUTPUT##*.}
-		if [ -f $TMP ]
+		if [ -f "$TMP" ]
 		then 
 			read -p "Intermediate file found! Reuse? (selecting no with overwrite) y/n: " RESPONSE
 			if ! [[ $RESPONSE =~ y ]]
 			then
 				set -x
-				sox $ARGS $INPUT $TMP silence -l 1 ${BURST_DURATION} $SILENCE_THRESHOLD -1 $SILENCE_DURATION $SILENCE_THRESHOLD
+				sox $ARGS "$INPUT" "$TMP" silence -l 1 ${BURST_DURATION} $SILENCE_THRESHOLD -1 $SILENCE_DURATION $SILENCE_THRESHOLD
 				set +x
 			fi
 		else
-			sox $ARGS $INPUT $TMP silence -l 1 ${BURST_DURATION} $SILENCE_THRESHOLD -1 $SILENCE_DURATION $SILENCE_THRESHOLD
+			sox $ARGS "$INPUT" "$TMP" silence -l 1 ${BURST_DURATION} $SILENCE_THRESHOLD -1 $SILENCE_DURATION $SILENCE_THRESHOLD
 		fi
 		rm /tmp/*-pre.wav
 		INPUT=$TMP
-	        DURATION=$(( $( date -u --date="$(soxi $INPUT | grep Duration | cut -d':' -f2- | cut -d' ' -f2)" +%s ) - $( date -u --date="0:00:00" +%s ) ))
+	        DURATION=$(( $( date -u --date="$(soxi "$INPUT" | grep Duration | cut -d':' -f2- | cut -d' ' -f2)" +%s ) - $( date -u --date="0:00:00" +%s ) ))
 		echo "Silence trimmed. New duration: $DURATION"
 		SILENCE_REMOVED=true
 	fi
@@ -151,7 +159,7 @@ if [ -f $OUTPUT ]; then
 		exit 1
 	fi
 fi
-sox --norm $ARGS $INPUT $PREOUT -t wavpcm -b 16 $OUTPUT $FILTERS
+sox $ARGS "$INPUT" $PREOUT -t wavpcm -b 16 "$OUTPUT" $FILTERS
 set +x
 echo "... done!"
 	

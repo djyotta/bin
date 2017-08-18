@@ -90,18 +90,23 @@ if ! DATESTAMP="$(echo $INPUT | cut -d'_' -f1)"\
 	|| ! MONTH="$(echo $DATESTAMP | head -c6 | tail -c+5)"\
 	|| ! DATE="$(echo $DATESTAMP | tail -c+7)"
 then
-	echo "The input file does not have the correct name format!"
+	echo "The input filename does not have the correct name format!"
 	show_help
 	exit 1
 fi
 OUTPUT="$(echo ${INPUT%.*} | cut -d'-' -f1).toc"
 if [ "$OUTPUT" = ".toc" ]; then
-	echo "The input file does not have the correct name format!"
+	echo "The input filename does not have the correct name format!"
 	show_help
 	exit 1
 fi
 if [ -z "$PERFORMER" ]; then show_help; exit 1; fi
 if ! $BIBLESTUDY && ! $SERMON; then show_help;exit 1;fi
+DURATION=$(~/git/bin/ts-convert.sh $(soxi $INPUT | awk -e '/Duration/ { print $3 }'))
+TRACKS=$((DURATION/5/60))
+if $((DURATION%(5*60) > 150)); then
+	TRACKS=$(TRACKS-1)
+fi
 
 echo "$TOP"
 echo "Input: $INPUT"
@@ -110,7 +115,7 @@ echo "Output: $OUTPUT"
 echo "$DIVIDER"
 ################################################################################
 echo "Writing toc file..."
-max_index=16
+max_index=$TRACKS
 if (( $VERBOSITY > 1 )); then
 	set -v
 fi
@@ -132,7 +137,7 @@ CD_TEXT {
 echo -e "TRACK AUDIO
 CD_TEXT {
   LANGUAGE 0 {
-    TITLE \"$TITLE $index/16\"
+    TITLE \"$TITLE $index/$max_index\"
     PERFORMER \"$PERFORMER\"
   }
 }
@@ -142,7 +147,7 @@ done`
 TRACK AUDIO
 CD_TEXT {
   LANGUAGE 0 {
-    TITLE "$TITLE $max_index/16"
+    TITLE "$TITLE $max_index/$max_index"
     PERFORMER "$PERFORMER"
   }
 }

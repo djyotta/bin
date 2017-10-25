@@ -146,6 +146,7 @@ fi
 
 if $DOWNLOAD; then
     if ! [ "${TYPE:-undef}" == "undef" ] && ! [ "${DATE:-undef}" == "undef" ] && ! [ "${USER:-undef}" == "undef" ]; then
+        MERGE=merge.txt
         PLAYLIST=$(curl -b $COOKIE -c $COOKIE \
              "${USERURL}/replay.php" \
              -H 'Accept-Encoding: gzip, deflate' \
@@ -162,7 +163,6 @@ if $DOWNLOAD; then
             if [[ "$line" =~ "#" ]]; then 
                 continue
             else 
-                MERGE=merge.txt
                 echo "" > $MERGE
                 wget -q -O - "http:${PLAYLIST%/*}/$line" | while read subline ; do
                     if [[ "$subline" =~ "#" ]]; then

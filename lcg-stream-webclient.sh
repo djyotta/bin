@@ -113,7 +113,6 @@ while getopts ":u:p:n:d:t:fhv" opt; do
 			;;
 	esac
 done
-set -x
 if [ "${PASS:-undef}" == "undef" ] && ! [ -f "$COOKIE" ]; then
     die $HELP "Password must be specified!"
 fi
@@ -165,16 +164,21 @@ if $DOWNLOAD; then
             if [[ "$line" =~ "#" ]]; then 
                 continue
             else 
+                MERGE=merge.txt
+                echo "" > $MERGE
                 wget -q -O - "http:${PLAYLIST%/*}/$line" | while read subline ; do
                     if [[ "$subline" =~ "#" ]]; then
                         continue
                     else
                         echo "Downloading fragment: $subline"
                         wget "http:${PLAYLIST%/*}/$subline"
+                        echo file "'${subline}'" >> $MERGE
                     fi
                 done
             fi
         done
+        # join
+        ffmpeg -f concat -i $MERGE  -c copy "${USER}_${DATE}_${TYPE}.ts"
     fi
 fi
 

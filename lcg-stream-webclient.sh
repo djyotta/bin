@@ -48,7 +48,7 @@ cat <<EOF
     -n     update notice board. The message is taken from stdin unless FILE is specified
     -t     type of stream.
     -f     finalize stream. Must supply -t
-    -d     download an archived stream. Must supply -t
+    -d     download an archived stream. Must supply -t and -u
            DATE is like: mm-dd-yy (EST I think)
 
 EOF
@@ -178,7 +178,7 @@ if $DOWNLOAD; then
         # join
         ffmpeg -f concat -i $MERGE  -c copy "${USER}_${DATE}_${TYPE}.ts"
     else
-        die $HELP "-t, -d and -u must be specified!"
+        die $HELP "-t and -u must be specified!"
     fi
 fi
 

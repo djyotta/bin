@@ -44,14 +44,12 @@ cat <<EOF
 
   usage: ${0##*/} [[-u USERNAME] -p PASSWORD]  [-n FILE] [-t TYPE [-d DATE]|[-f]]
     -u     provide the Stream Site  (deafult=$USER)
-    -p     provide the admin PASSWORD
-    -f     finalize stream. 
-    -t     type of stream. Must supply -t
+    -p     provide the PASSWORD
     -n     update notice board. The message is taken from stdin unless FILE is specified
+    -t     type of stream.
+    -f     finalize stream. Must supply -t
     -d     download an archived stream. Must supply -t
            DATE is like: mm-dd-yy (EST I think)
-
-  note: if no password is provided, the existing cookie will be used
 
 EOF
 }

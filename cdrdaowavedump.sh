@@ -90,13 +90,10 @@ ARGS="-S -V3 -G "
 : ${BURST_DURATION:=0.5}
 set -x
 if [ "${PRE_PROCESS:-x}" != "x" ]; then
-	if ! [ -p /tmp/fifo ]; then mkfifo /tmp/fifo; fi
 	echo "Pre-processing..."
 	TMP=/tmp/${OUTPUT%%.*}-pre.${OUTPUT##*.}
 	if [ "$(soxi "$INPUT" 2>&1 1>/dev/null | cut -d':' -f1)" == "soxi FAIL formats" ]; then
-		FFMPEG_FILE=${TMP%%-*}-ffmpeg.${OUTPUT##*.}
-		ffmpeg -i "$INPUT" -f sox "${FFMPEG_FILE}"
-		sox $ARGS "${FFMPEG_FILE}" "$TMP" $PRE_PROCESS 
+		ffmpeg -i $INPUT -f sox - | (sleep 1; sox $ARGS - $TMP $PRE_PROCESS)
 	else
 		sox $ARGS "$INPUT" "$TMP" $PRE_PROCESS
 	fi
@@ -105,6 +102,18 @@ if [ "${PRE_PROCESS:-x}" != "x" ]; then
 	RATE=$(soxi "$INPUT" | grep "Sample Rate" | cut -d':' -f2- | cut -d' ' -f2)
 	echo "Pre-processing complete. New Duration: $DURATION"
 fi
+###############################################################################
+[ $DURATION ] || while read line; do
+	if [[ $line =~ Duration ]]; then
+		DURATION=$(( $( date -u --date="$(echo $line | cut -d':' -f2- | cut -d' ' -f2)" +%s ) - $( date -u --date="0:00:00" +%s ) ))
+	elif [[ $line =~ 'Sample Rate' ]]; then
+		RATE=$(echo $line | cut -d':' -f2- | cut -d' ' -f2)
+	fi
+echo $line
+done <<EOF
+$(soxi $INPUT)
+EOF
+################################################################################
 while (( DURATION > MAX_LEN )); do
 	if $SILENCE_REMOVED; then
 		TEMPO=$(( DURATION / MAX_LEN )).$( printf %02d $(( ( DURATION % MAX_LEN ) * 100 / MAX_LEN + 1)) )
@@ -128,6 +137,7 @@ while (( DURATION > MAX_LEN )); do
 		else
 			sox $ARGS "$INPUT" "$TMP" silence -l 1 ${BURST_DURATION} $SILENCE_THRESHOLD -1 $SILENCE_DURATION $SILENCE_THRESHOLD
 		fi
+		rm /tmp/*-pre.wav
 		INPUT=$TMP
 	        DURATION=$(( $( date -u --date="$(soxi "$INPUT" | grep Duration | cut -d':' -f2- | cut -d' ' -f2)" +%s ) - $( date -u --date="0:00:00" +%s ) ))
 		echo "Silence trimmed. New duration: $DURATION"
@@ -142,6 +152,13 @@ if [ "$RATE" != "$CDDA_RATE" ]; then
 fi
 echo "Dumping wave file..."
 set -x
+if [ -f $OUTPUT ]; then
+	read -p "Overwrite $OUTPUT? y/n: " RESPONSE
+	if ! [[ $RESPONSE =~ y ]]
+	then
+		exit 1
+	fi
+fi
 sox $ARGS "$INPUT" $PREOUT -t wavpcm -b 16 "$OUTPUT" $FILTERS
 set +x
 echo "... done!"

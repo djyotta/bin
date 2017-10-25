@@ -42,16 +42,14 @@ die(){
 show_help(){
 cat <<EOF
 
-  usage: ${0##*/} [[-u USERNAME] -p PASSWORD]  [-f [NAME]] [-n [FILE]] [-d DATE]
+  usage: ${0##*/} [[-u USERNAME] -p PASSWORD]  [-n FILE] [-t TYPE [-d DATE]|[-f]]
     -u     provide the Stream Site  (deafult=$USER)
     -p     provide the admin PASSWORD
     -f     finalize stream. 
     -t     type of stream. Must supply -t
     -n     update notice board. The message is taken from stdin unless FILE is specified
-    -d     download an archived stream.
-           The URI currently is like: 
-             <ip>:1935/vods3/_definst_/mp4:amazons3/lcgwebcast.replays/<key>_mm-dd-yy_<type>.mp4/playlist.m3u8
-           If -f is given, then <type> is com
+    -d     download an archived stream. Must supply -t
+           DATE is like: mm-dd-yy (EST I think)
 
   note: if no password is provided, the existing cookie will be used
 
@@ -143,6 +141,8 @@ if $FINALIZE; then
              -H 'Connection: keep-alive' \
              -H 'Upgrade-Insecure-Requests: 1' \
              --data "type=$TYPE" | html2text
+    else
+        die $HELP "-t must be specified!"
     fi
 fi
 
@@ -179,6 +179,8 @@ if $DOWNLOAD; then
         done
         # join
         ffmpeg -f concat -i $MERGE  -c copy "${USER}_${DATE}_${TYPE}.ts"
+    else
+        die $HELP "-t, -d and -u must be specified!"
     fi
 fi
 
